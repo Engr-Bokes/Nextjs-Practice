@@ -1,13 +1,12 @@
-// This file contains placeholder data that you'll be replacing with real data in the Data Fetching chapter:
-// https://nextjs.org/learn/dashboard-app/fetching-data
-const users = [
-  {
-    id: '410544b2-4001-4271-9855-fec4b6a6442a',
-    name: 'User',
-    email: 'user@nextmail.com',
-    password: '123456',
-  },
-];
+import sql from '@/app/lib/db'; // Import the PostgreSQL client
+import bcrypt from 'bcrypt'; // Import bcrypt for password hashing
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  password: string;
+}
 
 const customers = [
   {
@@ -144,4 +143,53 @@ const revenue = [
   { month: 'Dec', revenue: 4800 },
 ];
 
-export { users, customers, invoices, revenue };
+// Function to save a new user
+async function saveUser(newUser: { name: string; email: string; password: string }) {
+  const { name, email, password } = newUser;
+
+  try {
+    // Hash the password before saving it
+    const hashedPassword = await bcrypt.hash(password, 10); // 10 is the number of salt rounds
+    console.log('Hashed password:', hashedPassword);
+
+    // Insert the new user into the database
+    const [user] = await sql`
+      INSERT INTO users (name, email, password)
+      VALUES (${name}, ${email}, ${hashedPassword})
+      RETURNING id, name, email;
+    `;
+
+    console.log('User saved successfully:', user);
+    return user;
+  } catch (err) {
+    console.error('Error saving user:', err);
+    throw new Error('Failed to create an account. Please try again.');
+  }
+}
+
+// Function to authenticate a user
+async function authenticateUser(email: string, password: string) {
+  try {
+    console.log('Attempting to authenticate user:', { email, password });
+
+    // Find the user in the database
+    const [user] = await sql`
+      SELECT id, name, email, password FROM users
+      WHERE email = ${email};
+    `;
+
+    if (user && (await bcrypt.compare(password, user.password))) {
+      console.log('User authenticated successfully:', user);
+      return { id: user.id, name: user.name, email: user.email }; // Return user without password
+    }
+
+    console.log('Invalid credentials');
+    return null; // Return null if user not found or password doesn't match
+  } catch (err) {
+    console.error('Error authenticating user:', err);
+    throw new Error('Failed to authenticate. Please try again.');
+  }
+}
+
+// Export all data and functions
+export { customers, invoices, revenue, saveUser, authenticateUser };
